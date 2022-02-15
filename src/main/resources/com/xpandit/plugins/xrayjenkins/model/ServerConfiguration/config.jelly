@@ -1,0 +1,153 @@
+<?jelly escape-by-default='true'?>
+<j:jelly xmlns:j="jelly:core" xmlns:f="/lib/form" xmlns:c="/lib/credentials">
+	<f:section title="${%Xray Configuration}" name="xrayinstance">
+		<f:entry title="${%Jira instances}">
+			<f:repeatable var="serverInstances" items="${descriptor.serverInstances}" minimum="1">
+				<table>
+
+					<j:if test="${!empty(serverInstances.configID)}">
+						<f:entry title="${%Configuration ID}" field="configID" >
+							<f:textbox value="${serverInstances.configID}" clazz="raven-hidden"/>
+							${serverInstances.configID}
+						</f:entry>
+					</j:if>
+
+					<f:entry title="${%Configuration alias}" field="alias">
+						<f:textbox value="${serverInstances.alias}" />
+					</f:entry>
+
+					<f:entry title="Hosting" field="hosting">
+						<select name="hosting">
+							<option value="${descriptor.serverHostingTypeName}" selected="${serverInstances.hosting.toString().equals(descriptor.serverHostingTypeName) ? 'true' : null}">Server/Data Center</option>
+							<option value="${descriptor.cloudHostingTypeName}" selected="${serverInstances.hosting.toString().equals(descriptor.cloudHostingTypeName) ? 'true' : null}">Cloud</option>
+						</select>
+					</f:entry>
+
+					<f:entry title="${%Jira URL}" field="serverAddress">
+							<f:textbox value="${serverInstances.serverAddress}" />
+					</f:entry>
+
+					<f:entry title="${%Credentials}" field="credentialId">
+						<c:select expressionAllowed="false" default="${serverInstances.credentialId}"/>
+					</f:entry>
+
+					<f:entry title="" field="cloudInstanceHelp">
+						<span class="cloud-instance-help-header">To add a new Credential:</span>
+						<br/>
+						<span><b>Xray Client ID</b> should be placed in the <b>Username</b> field</span>
+						<br/>
+						<span><b>Xray Client Secret</b> should be placed in the <b>Password</b> field</span>
+					</f:entry>
+
+					<f:entry title="" field="serverInstanceHelp">
+						<span class="server-instance-help-header">There are two types of credentials supported:</span>
+						<br/>
+						<span><b>Username/Password:</b> This is the traditional method to authenticate in a Jira Server instance</span>
+						<br/>
+						<span><b>Bearer Token:</b> a token can be used to authenticate all requests made. For this, please out your token in a credential of type <b>Secret text</b></span>
+					</f:entry>
+
+                    <div class="test-connection-button-wrapper">
+                        <f:validateButton title="${%Test Connection}" progress="${%Testing...}"
+                                          method="testConnection" with="hosting,serverAddress,credentialId" />
+                    </div>
+					<f:entry>
+						<div align="right" class="repeatable-delete show-if-only" style="margin-left: 1em;">
+							<f:repeatableDeleteButton value="${%Delete instance}"/><br/>
+						</div>
+					</f:entry>
+
+				</table>
+			</f:repeatable>
+		</f:entry>
+	</f:section>
+
+	<style>
+		.raven-hidden {
+			display: none;
+		}
+	</style>
+	
+	<script>
+		(function(Q){
+		    var toggleHelpText = function(instanceInput) {
+				const hostingType = Q(instanceInput).first().find('select[name="hosting"]')[0].value;
+				const $fieldCloudHelperWrapper = Q(instanceInput).first().find('.cloud-instance-help-header').parent().parent();
+				const $fieldServerHelperWrapper = Q(instanceInput).first().find('.server-instance-help-header').parent().parent();
+
+				if(hostingType === '${descriptor.cloudHostingTypeName}'){
+					$fieldCloudHelperWrapper.show();
+					$fieldServerHelperWrapper.hide();
+				} else if(hostingType === '${descriptor.serverHostingTypeName}'){
+					$fieldCloudHelperWrapper.hide();
+					$fieldServerHelperWrapper.show();
+				}
+			};
+
+			var hideServerAddressInput = function (instanceInput) {
+				var hostingType = Q(instanceInput).first().find('select[name="hosting"]')[0].value;
+
+				const $fieldWrapper = Q(instanceInput).first().find('input[name="_.serverAddress"]').parent().parent();
+				if(hostingType === '${descriptor.cloudHostingTypeName}'){
+					$fieldWrapper.hide();
+				} else if(hostingType === '${descriptor.serverHostingTypeName}'){
+					$fieldWrapper.show();
+				}
+
+				toggleHelpText(instanceInput);
+			};
+
+			var hideServerAddressInputs = function(){
+				Q('div[name="serverInstances"]').each(function(){
+					hideServerAddressInput(this);
+					toggleHelpText(this);
+				});
+			};
+
+			var observeNewInstance = new MutationObserver(function () {
+				var lastInstanceAdded = Q('select[name="hosting"]').last();
+
+				Q(lastInstanceAdded).on('change',function(e){
+					var serverInstance = Q(e.currentTarget).first().parents('div[name="serverInstances"]').first();
+					hideServerAddressInput(serverInstance);
+				});
+
+				toggleHelpText(Q('div[name="serverInstances"]').last());
+
+				observeNewInstance.disconnect();
+			});
+
+			var observeHostings = function() {
+			    hideServerAddressInputs();
+
+			    Q('select[name="hosting"]').on('change',function(e){
+			        var serverInstance = Q(e.currentTarget).first().parents('div[name="serverInstances"]').first();
+			        hideServerAddressInput(serverInstance);
+			    });
+
+			    var addInstanceButton = Q('div[name="serverInstances"]').first().parent().find('button').last();
+
+			    Q(addInstanceButton).click(function () {
+			        // When adding this event, it will stay on top of the click events stack for this button.
+					// Once clicked, this event will trigger first and the new server instance will not be there.
+					// So there is a need to use a mutation observer in order to wait that a new server instance is
+					// created and added to the Dom.
+			        observeNewInstance.observe(document.querySelector('div[name="serverInstances"]').parentNode, {
+			            childList: true,
+						subtree: true
+			        });
+			    });
+			    
+			    var testConnectionButton = Q('.test-connection-button-wrapper button');
+			    
+			    Q(testConnectionButton).click(function(evt) {
+			        Q(evt.target).parents('.test-connection-button-wrapper').find('.error,.ok').remove();
+			    });
+			};
+
+			Q(window).load(function() {
+				observeHostings();
+			});
+		})(jQuery);
+	</script>
+</j:jelly>
